@@ -1,3 +1,10 @@
+# 重点
+* jwt 存入 sessionStorage,防止存入 cookie 被CSFR
+* 设置 session id,且jwt 添加 fingerprint(session id 的hash),防止jwt 被盗取 后能正常使用(例如 XSS)
+* 设置 jwt blacklist,提供注销功能
+* jwt 可以再次加密,防止 payload 的信息被利用
+* 强密码
+
 # Introduction
 
 Many applications use **JSON Web Tokens** (JWT) to allow the client to indicate its identity for further exchange after authentication.
@@ -20,7 +27,7 @@ Token structure example taken from [JWT.IO](https://jwt.io/#debugger):
 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
 eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9.
 TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ
-```    
+```
 
 Chunk 1: **Header**
 
@@ -29,7 +36,7 @@ Chunk 1: **Header**
   "alg": "HS256",
   "typ": "JWT"
 }
-```    
+```
 
 Chunk 2: **Payload**
 
@@ -39,19 +46,19 @@ Chunk 2: **Payload**
   "name": "John Doe",
   "admin": true
 }
-```    
+```
 
 Chunk 3: **Signature**
 
 ```javascript
 HMACSHA256( base64UrlEncode(header) + "." + base64UrlEncode(payload), KEY )
-```    
+```
 
 # Objective
 
 This cheatsheet provides tips to prevent common security issues when using JSON Web Tokens (JWT) with Java.
 
-The tips presented in this article are part of a Java project that was created to show the correct way to handle creation and validation of JSON Web Tokens. 
+The tips presented in this article are part of a Java project that was created to show the correct way to handle creation and validation of JSON Web Tokens.
 
 You can find the Java project [here](https://github.com/righettod/poc-jwt), it uses the official [JWT library](https://jwt.io/#libraries).
 
@@ -99,11 +106,14 @@ DecodedJWT decodedToken = verifier.verify(token);
 
 This attack occurs when a token has been intercepted/stolen by an attacker and they use it to gain access to the system using targeted user identity.
 
+盗窃 token
+
 ### How to Prevent
 
 A way to prevent it is to add a "user context" in the token. A user context will be composed of the following information:
 
 - A random string that will be generated during the authentication phase. It will be sent to the client as an hardened cookie (flags: [HttpOnly + Secure](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#Secure_and_HttpOnly_cookies) + [SameSite](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#SameSite_cookies) + [cookie prefixes](https://googlechrome.github.io/samples/cookie-prefixes/)).
+- 生成一个随机数设置到 cookie,jwt 中存放该随机数的 hash,每次请求校验是否一致
 - A SHA256 hash of the random string will be stored in the token (instead of the raw value) in order to prevent any XSS issues allowing the attacker to read the random string value and setting the expected cookie.
 
 IP addresses should not be used because there are some legitimate situations in which the IP address can change during the same session. For example, when an user accesses an application through their mobile device and the mobile operator changes during the exchange, then the IP address may (often) change. Moreover, using the IP address can potentially cause issues with [European GDPR](http://www.eugdpr.org/) compliancy.
@@ -200,6 +210,7 @@ DecodedJWT decodedToken = verifier.verify(token);
 This problem is inherent to JWT because a token only becomes invalid when it expires. The user has no built-in feature to explicitly revoke the validity of a token. This means that if it is stolen, a user cannot revoke the token itself thereby blocking the attacker.
 
 ### How to Prevent
+* 黑名单:保存 jwt hash 和超时字段(超时的自动删除),logout 就加入黑名单
 
 A way to protect against this is to implement a token blacklist that will be used to mimic the "logout" feature that exists with traditional session management system.
 
@@ -311,6 +322,8 @@ public class TokenRevoker {
 
 This attack occurs when an attacker has access to a token (or a set of tokens) and extracts information stored in it (the contents of JWT tokens are base64 encoded, but is not encrypted by default) in order to obtain information about the system. Information can be for example the security roles, login format...
 
+* njwt payload 是未加密的,有可能信息被利用
+* 利用对称密钥加密 jwt,传回服务器时先解密
 ### How to Prevent
 
 A way to protect against this attack is to cipher the token using, for example, a symmetric algorithm.
@@ -458,14 +471,20 @@ String token = tokenCipher.decipherToken(cipheredToken, this.keyCiphering);
 This occurs when an application stores the token in a manner exhibiting the following behavior:
 
 - Automatically sent by the browser (*Cookie* storage).
+- Cookie 的问题:自动被浏览器发送
 - Retrieved even if the browser is restarted (Use of browser *localStorage* container).
+- localStorage的问题:一直存在
 - Retrieved in case of [XSS](Cross_Site_Scripting_Prevention_Cheat_Sheet.md) issue (Cookie accessible to JavaScript code or Token stored in browser local/session storage).
+- XSS 攻击:可以读取 cookie 和 localStorage
 
 ### How to Prevent
 
 1.  Store the token using the browser *sessionStorage* container.
-1.  Add it as a *Bearer* HTTP `Authentication` header with JavaScript when calling services.
-1.  Add [fingerprint](JSON_Web_Token_Cheat_Sheet_for_Java.md#token-sidejacking) information to the token.
+* 存入 sessionStorage
+2.  Add it as a *Bearer* HTTP `Authentication` header with JavaScript when calling services.
+* 使用 Bearer header
+3.  Add [fingerprint](JSON_Web_Token_Cheat_Sheet_for_Java.md#token-sidejacking) information to the token.
+* hash
 
 By storing the token in browser *sessionStorage* container it exposes the token to being stolen through a XSS attack. However, fingerprints added to the token prevent reuse of the stolen token by the attacker on their machine. To close a maximum of exploitation surfaces for an attacker, add a browser [Content Security Policy](https://www.owasp.org/index.php/OWASP_Secure_Headers_Project#csp) to harden the execution context.
 

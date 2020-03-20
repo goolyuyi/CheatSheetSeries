@@ -43,9 +43,13 @@ There seems to be a convergence towards using [JSON Web Tokens](https://tools.ie
 
 If MACs are used for integrity protection, every service that is able to validate JWTs can also create new JWTs using the same key. This means that all services using the same key have to mutually trust each other. Another consequence of this is that a compromise of any service also compromises all other services sharing the same key. See [here](https://tools.ietf.org/html/rfc7515#section-10.5) for additional information.
 
+每个个体服务都应有校验 jwt 的能力
+
 The relying party or token consumer validates a JWT by verifying its integrity and claims contained.
 
 - A relying party must verify the integrity of the JWT based on its own configuration or hard-coded logic. It must not rely on the information of the JWT header to select the verification algorithm. See [here](https://www.chosenplaintext.ca/2015/03/31/jwt-algorithm-confusion.html) and [here](https://www.youtube.com/watch?v=bW5pS4e_MX8>)
+
+硬编码校验,不要根据 jwt 提供的信息校验
 
 Some claims have been standardised and should be present in JWT used for access controls. At least the following of the standard claims should be verified:
 
@@ -56,12 +60,14 @@ Some claims have been standardised and should be present in JWT used for access 
 
 As JWTs contain details of the authenticated entity (user etc.) a disconnect can occur between the JWT and the current state of the users session, for example, if the session is terminated earlier than the expiration time due to an explicit logout or an idle timeout. When an explicit session termination event occurs, a digest or hash of any associated JWTs should be submitted to a blacklist on the API which will invalidate that JWT for any requests until the expiration of the token. See the [JSON_Web_Token_Cheat_Sheet_for_Java](JSON_Web_Token_Cheat_Sheet_for_Java.md#token-explicit-revocation-by-the-user) for further details.
 
+使用 jwt 黑名单
+
 # API Keys
 
 Public REST services without access control run the risk of being farmed leading to excessive bills for bandwidth or compute cycles. API keys can be used to mitigate this risk. They are also often used by organisation to monetize APIs; instead of blocking high-frequency calls, clients are given access in accordance to a purchased access plan.
 
 API keys can reduce the impact of denial-of-service attacks. However, when they are issued to third-party clients, they are relatively easy to compromise.
-
+API key 有效缓和 DDOS 攻击
 - Require API keys for every request to the protected endpoint.
 - Return `429 Too Many Requests` HTTP response code if requests are coming in too quickly.
 - Revoke the API key if the client violates the usage agreement.
@@ -77,13 +83,13 @@ In Java EE in particular, this can be difficult to implement properly. See [Bypa
 
 # Input validation
 
-- Do not trust input parameters/objects.
+- Do not trust input parameters/objects. 校验所有输入参数
 - Validate input: length / range / format and type.
 - Achieve an implicit input validation by using strong types like numbers, booleans, dates, times or fixed data ranges in API parameters.
 - Constrain string inputs with regexps.
 - Reject unexpected/illegal content.
 - Make use of validation/sanitation libraries or frameworks in your specific language.
-- Define an appropriate request size limit and reject requests exceeding the limit with HTTP response status 413 Request Entity Too Large.
+- Define an appropriate request size limit and reject requests exceeding the limit with HTTP response status 413 Request Entity Too Large. 对于请求内容大小要校验
 - Consider logging input validation failures. Assume that someone who is performing hundreds of failed input validations per second is up to no good.
 - Have a look at input validation cheat sheet for comprehensive explanation.
 - Use a secure parser for parsing the incoming messages. If you are using XML, make sure to use a parser that is not vulnerable to [XXE](https://www.owasp.org/index.php/XML_External_Entity_%28XXE%29_Processing) and similar attacks.
@@ -92,11 +98,11 @@ In Java EE in particular, this can be difficult to implement properly. See [Bypa
 
 A REST request or response body should match the intended content type in the header. Otherwise this could cause misinterpretation at the consumer/producer side and lead to code injection/execution.
 
-- Document all supported content types in your API.
+- Document all supported content types in your API. 做好文档
 
 ## Validate request content types
 
-- Reject requests containing unexpected or missing content type headers with HTTP response status `406 Unacceptable` or `415 Unsupported Media Type`.
+- Reject requests containing unexpected or missing content type headers with HTTP response status `406 Unacceptable` or `415 Unsupported Media Type`. 拒绝不合适的 content type
 - For XML content types ensure appropriate XML parser hardening, see the [XXE cheat sheet](XML_External_Entity_Prevention_Cheat_Sheet.md).
 - Avoid accidentally exposing unintended content types by explicitly defining content types e.g. [Jersey](https://jersey.github.io/) (Java) `@consumes("application/json"); @produces("application/json")`. This avoids [XXE-attack](https://www.owasp.org/index.php/XML_External_Entity_%28XXE%29_Processing) vectors for example.
 
@@ -113,7 +119,7 @@ Services including script code (e.g. JavaScript) in their responses must be espe
 
 # Management endpoints
 
-- Avoid exposing management endpoints via Internet.
+- Avoid exposing management endpoints via Internet. 别在公网上暴露管理员接口
 - If management endpoints must be accessible via the Internet, make sure that users must use a strong authentication mechanism, e.g. multi-factor.
 - Expose management endpoints via different HTTP ports or hosts preferably on a different NIC and restricted subnet.
 - Restrict access to these endpoints by firewall rules  or use of access control lists.
